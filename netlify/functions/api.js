@@ -1,9 +1,12 @@
-// Penghubung aman antara tampilan inbox dan API smtp.dev.
-// API key disimpan di environment variable Netlify, tidak pernah dikirim ke browser.
+// Penghubung antara tampilan inbox dan smtp.dev.
+// API key dan kunci sesi disimpan di environment variable Netlify, tidak pernah dikirim ke browser.
 const crypto = require("crypto");
+const tls = require("tls");
 const BASE = "https://api.smtp.dev";
 const enc = encodeURIComponent;
-let cachedId;
+const ids = new Map();
+const fails = new Map();
+const TTL = 12 * 3600 * 1000;
 
 const reply = (status, body) => ({
   statusCode: status,
@@ -21,31 +24,79 @@ async function smtp(path, opts = {}) {
   return res.json();
 }
 
-async function accountId() {
-  if (cachedId) return cachedId;
-  const want = (process.env.MAIL_ADDRESS || "").toLowerCase();
-  const r = await smtp("/accounts?address=" + enc(want));
-  const acc = (r.member || []).find((a) => a.address.toLowerCase() === want);
-  if (!acc) throw new Error("Akun email tidak ditemukan");
-  return (cachedId = acc.id);
+async function accountId(address) {
+  if (ids.has(address)) return ids.get(address);
+  const r = await smtp("/accounts?address=" + enc(address));
+  const acc = (r.member || []).find((a) => a.address.toLowerCase() === address);
+  if (!acc) throw new Error("Akun tidak ditemukan");
+  ids.set(address, acc.id);
+  return acc.id;
 }
 
-function allowed(event) {
-  const a = Buffer.from(event.headers["x-access-password"] || "");
-  const b = Buffer.from(process.env.ACCESS_PASSWORD || "");
-  return b.length > 0 && a.length === b.length && crypto.timingSafeEqual(a, b);
+// Cek password mailbox lewat IMAP (API smtp.dev tidak punya endpoint login).
+function imapLogin(user, pass) {
+  return new Promise((resolve) => {
+    if (/[\r\n\0]/.test(user + pass)) return resolve(false);
+    const q = (s) => '"' + s.replace(/(["\\])/g, "\\$1") + '"';
+    const sock = tls.connect(993, "imap.smtp.dev", { servername: "imap.smtp.dev" });
+    let buf = "", sent = false, done = false;
+    const end = (ok) => { if (done) return; done = true; sock.destroy(); resolve(ok); };
+    sock.setTimeout(8000, () => end(false));
+    sock.on("error", () => end(false));
+    sock.on("data", (d) => {
+      buf += d.toString("utf8");
+      if (!sent) {
+        if (!buf.includes("\r\n")) return;
+        sent = true; buf = "";
+        sock.write(`a1 LOGIN ${q(user)} ${q(pass)}\r\n`);
+      } else if (/^a1 OK/m.test(buf)) end(true);
+      else if (/^a1 (NO|BAD)/m.test(buf)) end(false);
+    });
+  });
 }
+
+const sign = (p) => crypto.createHmac("sha256", process.env.SESSION_SECRET).update(p).digest("base64url");
+function makeToken(address) {
+  const p = Buffer.from(JSON.stringify({ a: address, e: Date.now() + TTL })).toString("base64url");
+  return p + "." + sign(p);
+}
+function readToken(header) {
+  const [p, s] = String(header || "").replace(/^Bearer /, "").split(".");
+  if (!p || !s) return null;
+  const a = Buffer.from(s), b = Buffer.from(sign(p));
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+  try {
+    const d = JSON.parse(Buffer.from(p, "base64url").toString());
+    return d.e > Date.now() ? d.a : null;
+  } catch { return null; }
+}
+const recent = (k) => { const n = Date.now(); const f = (fails.get(k) || []).filter((t) => n - t < 600000); fails.set(k, f); return f; };
 
 exports.handler = async (event) => {
-  if (!allowed(event)) return reply(401, { error: "unauthorized" });
   const q = event.queryStringParameters || {};
+  if (!process.env.SESSION_SECRET || !process.env.SMTPDEV_API_KEY) return reply(500, { error: "Konfigurasi server belum lengkap" });
   try {
-    const id = await accountId();
+    if (q.action === "login") {
+      if (event.httpMethod !== "POST") return reply(405, { error: "method" });
+      let b; try { b = JSON.parse(event.body || "{}"); } catch { b = {}; }
+      const address = String(b.address || "").trim().toLowerCase();
+      const password = String(b.password || "");
+      const bad = () => { recent(address).push(Date.now()); return reply(401, { error: "Email atau password salah" }); };
+      if (!address || !password) return bad();
+      if (recent(address).length >= 5) return reply(429, { error: "Terlalu banyak percobaan. Coba lagi dalam 10 menit." });
+      let ok = false;
+      try { await accountId(address); ok = await imapLogin(address, password); } catch { ok = false; }
+      return ok ? reply(200, { token: makeToken(address), address }) : bad();
+    }
+
+    const address = readToken(event.headers.authorization);
+    if (!address) return reply(401, { error: "unauthorized" });
+    const id = await accountId(address);
     const box = `/accounts/${id}/mailboxes/${enc(q.mailbox || "")}`;
     const msg = `${box}/messages/${enc(q.id || "")}`;
     switch (q.action) {
       case "check":
-        return reply(200, { address: process.env.MAIL_ADDRESS });
+        return reply(200, { address });
       case "mailboxes":
         return reply(200, (await smtp(`/accounts/${id}/mailboxes`)).member || []);
       case "messages": {
