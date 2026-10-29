@@ -7,6 +7,8 @@ const enc = encodeURIComponent;
 const ids = new Map();
 const fails = new Map();
 const TTL = 12 * 3600 * 1000;
+const members = (r) => (Array.isArray(r) ? r : (r && (r.member || r["hydra:member"])) || []);
+const hasNext = (r) => Array.isArray(r) ? r.length >= 30 : !!(r && ((r.view && r.view.next) || (r["hydra:view"] && r["hydra:view"]["hydra:next"])));
 
 const reply = (status, body) => ({
   statusCode: status,
@@ -27,7 +29,7 @@ async function smtp(path, opts = {}) {
 async function accountId(address) {
   if (ids.has(address)) return ids.get(address);
   const r = await smtp("/accounts?address=" + enc(address));
-  const acc = (r.member || []).find((a) => a.address.toLowerCase() === address);
+  const acc = members(r).find((a) => a.address.toLowerCase() === address);
   if (!acc) throw new Error("Akun tidak ditemukan");
   ids.set(address, acc.id);
   return acc.id;
@@ -36,21 +38,22 @@ async function accountId(address) {
 // Cek password mailbox lewat IMAP (API smtp.dev tidak punya endpoint login).
 function imapLogin(user, pass) {
   return new Promise((resolve) => {
-    if (/[\r\n\0]/.test(user + pass)) return resolve(false);
+    if (/[\r\n\0]/.test(user + pass)) return resolve({ ok: false, why: "karakter tidak valid" });
     const q = (s) => '"' + s.replace(/(["\\])/g, "\\$1") + '"';
     const sock = tls.connect(993, "imap.smtp.dev", { servername: "imap.smtp.dev" });
     let buf = "", sent = false, done = false;
-    const end = (ok) => { if (done) return; done = true; sock.destroy(); resolve(ok); };
-    sock.setTimeout(8000, () => end(false));
-    sock.on("error", () => end(false));
+    const end = (ok, why) => { if (done) return; done = true; sock.destroy(); resolve({ ok, why }); };
+    sock.setTimeout(8000, () => end(false, "IMAP timeout"));
+    sock.on("error", (e) => end(false, "IMAP error: " + e.message));
+    sock.on("close", () => end(false, "IMAP koneksi ditutup"));
     sock.on("data", (d) => {
       buf += d.toString("utf8");
       if (!sent) {
         if (!buf.includes("\r\n")) return;
         sent = true; buf = "";
         sock.write(`a1 LOGIN ${q(user)} ${q(pass)}\r\n`);
-      } else if (/^a1 OK/m.test(buf)) end(true);
-      else if (/^a1 (NO|BAD)/m.test(buf)) end(false);
+      } else if (/^a1 OK/mi.test(buf)) end(true, "");
+      else if (/^a1 (NO|BAD)/mi.test(buf)) end(false, "IMAP menolak: " + (buf.match(/^a1 .*/mi) || [""])[0].slice(0, 80));
     });
   });
 }
@@ -81,12 +84,17 @@ exports.handler = async (event) => {
       let b; try { b = JSON.parse(event.body || "{}"); } catch { b = {}; }
       const address = String(b.address || "").trim().toLowerCase();
       const password = String(b.password || "");
-      const bad = () => { recent(address).push(Date.now()); return reply(401, { error: "Email atau password salah" }); };
+      const bad = (why) => { recent(address).push(Date.now()); return reply(401, { error: "Email atau password salah" + (process.env.DEBUG_LOGIN === "1" && why ? " [" + why + "]" : "") }); };
       if (!address || !password) return bad();
-      if (recent(address).length >= 5) return reply(429, { error: "Terlalu banyak percobaan. Coba lagi dalam 10 menit." });
-      let ok = false;
-      try { await accountId(address); ok = await imapLogin(address, password); } catch { ok = false; }
-      return ok ? reply(200, { token: makeToken(address), address }) : bad();
+      if (process.env.DEBUG_LOGIN !== "1" && recent(address).length >= 5) return reply(429, { error: "Terlalu banyak percobaan. Coba lagi dalam 10 menit." });
+      let why = "";
+      try {
+        await accountId(address);
+        const r = await imapLogin(address, password);
+        if (r.ok) return reply(200, { token: makeToken(address), address });
+        why = r.why;
+      } catch (e) { why = "API smtp.dev: " + e.message; }
+      return bad(why);
     }
 
     const address = readToken(event.headers.authorization);
@@ -98,10 +106,10 @@ exports.handler = async (event) => {
       case "check":
         return reply(200, { address });
       case "mailboxes":
-        return reply(200, (await smtp(`/accounts/${id}/mailboxes`)).member || []);
+        return reply(200, members(await smtp(`/accounts/${id}/mailboxes`)));
       case "messages": {
         const r = await smtp(`${box}/messages?page=${Number(q.page) || 1}`);
-        return reply(200, { items: r.member || [], next: !!(r.view && r.view.next) });
+        return reply(200, { items: members(r), next: hasNext(r) });
       }
       case "message": {
         const m = await smtp(msg);
