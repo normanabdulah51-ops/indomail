@@ -63,6 +63,15 @@ iframe{display:block;width:100%;border:0;background:#fff;min-height:200px}
 #scrim{display:none!important}
 #list,#read{position:static;display:block;border-left:1px solid var(--line)}
 #menu,.back{display:none}}
+.row > div {
+  min-width: 0;
+}
+.l1 {
+  display: flex;
+  justify-content: space-between;
+  gap: .5rem;
+  min-width: 0;
+}
 </style>
 </head>
 <body>
@@ -183,18 +192,26 @@ function renderRows() {
   const term = $("q").value.trim().toLowerCase();
   const shown = items.filter((m) => !term || [m.subject, m.intro, m.from && m.from.name, m.from && m.from.address].join(" ").toLowerCase().includes(term));
   if (!shown.length) rows.append(el("p", "muted pad", items.length ? "Tidak ada hasil." : "Belum ada email."));
+  
   shown.forEach((m) => {
     const row = el("div", "row" + (m.isRead ? "" : " unread") + (sel.has(m.id) ? " sel" : ""));
     const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = sel.has(m.id);
     cb.onclick = (e) => e.stopPropagation();
     cb.onchange = () => { cb.checked ? sel.add(m.id) : sel.delete(m.id); renderRows(); renderSel(); };
+    
     const c = el("div"), l1 = el("div", "l1");
+    
+    // PERBAIKAN: Penambahan class "f" pada nama pengirim agar text-overflow: ellipsis bekerja
     l1.append(el("span", "f", sender(m.from)), el("time", null, short(m.date)));
+    
+    // PERBAIKAN: Subjek dan Intro sudah dipastikan terbungkus kelas l2 dan l3
     c.append(l1, el("div", "l2", m.subject || "(tanpa subjek)"), el("div", "l3", m.intro || ""));
+    
     row.append(cb, c, starBtn(m));
     row.onclick = () => openMsg(m);
     rows.append(row);
   });
+  
   if (hasMore && !term) {
     const more = el("button", "btn", "Muat lebih banyak"); more.style.margin = "1rem";
     more.onclick = () => { page++; loadList(false).catch((e) => alert(e.message)); };
