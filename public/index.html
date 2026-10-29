@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Inbox</title>
+<style>
+:root{--accent:#2563eb;--bg:#fff;--panel:#f6f7f9;--fg:#1b1f24;--muted:#6b7280;--line:#e3e6ea;color-scheme:light dark}
+@media(prefers-color-scheme:dark){:root{--accent:#6ea8ff;--bg:#14161a;--panel:#1b1e23;--fg:#e8eaed;--muted:#9aa0a6;--line:#2a2e35}}
+*{box-sizing:border-box}html,body{height:100%;margin:0}
+body{font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--fg)}
+button{font:inherit;cursor:pointer;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:8px;padding:.4rem .8rem}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+input{font:inherit;width:100%;padding:.6rem .8rem;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg)}
+.muted{color:var(--muted)}.small{font-size:13px}.pad{padding:1rem}
+#login{height:100%;display:flex;align-items:center;justify-content:center;padding:1rem}
+#login form{width:100%;max-width:340px;display:grid;gap:.75rem}
+#app{display:none;height:100%;grid-template-columns:210px 340px 1fr}
+#app>*{min-width:0;overflow:auto;border-right:1px solid var(--line)}
+#folders{background:var(--panel);display:flex;flex-direction:column}
+#fl{flex:1;padding:.5rem}.foot{padding:1rem;display:grid;gap:.5rem}
+.head{display:flex;gap:.5rem;align-items:center;justify-content:space-between;padding:.7rem 1rem;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg)}
+.fbtn{display:flex;justify-content:space-between;width:100%;border:0;background:none;text-align:left;margin-bottom:2px}
+.fbtn.active{background:var(--bg);font-weight:600}
+.badge{background:var(--accent);color:#fff;border-radius:99px;padding:0 .5rem;font-size:12px}
+.row{padding:.7rem 1rem;border-bottom:1px solid var(--line);cursor:pointer}
+.row.active{background:var(--panel)}.row.unread .f,.row.unread .s{font-weight:700}
+.row .f,.row .s{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#read{display:flex;flex-direction:column;overflow:hidden}
+#msg{flex:1;display:flex;flex-direction:column;min-height:0}
+#msg h2{margin:0 0 .4rem;font-size:1.15rem}
+iframe{flex:1;border:0;background:#fff;min-height:0}
+.back{display:none}
+@media(max-width:860px){
+#app{grid-template-columns:1fr}#app>*{display:none;border-right:0}
+#app[data-view=folders]>#folders,#app[data-view=list]>#list{display:block}
+#app[data-view=folders]>#folders{display:flex}
+#app[data-view=read]>#read{display:flex}.back{display:inline-block}}
+</style>
+</head>
+<body>
+<div id="login"><form id="login-form">
+<h1 class="brand" style="margin:0;font-size:1.4rem">Inbox</h1>
+<p class="muted" style="margin:0">Masukkan password untuk membuka email.</p>
+<input id="pw" type="password" placeholder="Password" autocomplete="current-password" required>
+<button class="primary">Masuk</button><p id="err" style="margin:0;color:#dc2626"></p>
+</form></div>
+<div id="app" data-view="list">
+<aside id="folders"><div class="head"><strong class="brand">Inbox</strong></div><nav id="fl"></nav>
+<div class="foot"><div id="who" class="small muted"></div><button id="out">Keluar</button></div></aside>
+<section id="list"><div class="head"><button class="back" data-to="folders">←</button><strong id="boxname"></strong><button id="refresh">Muat ulang</button></div><div id="rows"></div></section>
+<article id="read"><div class="head"><button class="back" data-to="list">←</button><span></span><button id="del" hidden>Hapus</button></div>
+<div id="msg"><p class="muted pad">Pilih email untuk dibaca.</p></div></article>
+</div>
+<script>
+const BRAND = "Inbox"; // ganti nama tampilan di sini
+const API = "/.netlify/functions/api";
+const NAMES = { INBOX: "Kotak masuk", Sent: "Terkirim", Drafts: "Draf", Trash: "Sampah", Junk: "Spam" };
+const $ = (id) => document.getElementById(id);
+let pw = sessionStorage.getItem("pw") || "", box = null, boxes = [], page = 1, current = null;
+document.title = BRAND;
+document.querySelectorAll(".brand").forEach((e) => (e.textContent = BRAND));
+
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+const fmt = (d) => new Date(d).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" });
+const who = (f) => (f && (f.name ? `${f.name} <${f.address}>` : f.address)) || "(tanpa pengirim)";
+const setView = (v) => ($("app").dataset.view = v);
+
+async function api(action, params = {}, method = "GET") {
+  const res = await fetch(API + "?" + new URLSearchParams({ action, ...params }), { method, headers: { "x-access-password": pw } });
+  if (res.status === 401) { sessionStorage.removeItem("pw"); throw new Error("Password salah"); }
+  if (!res.ok) throw new Error("Gagal memuat data");
+  return res.json();
+}
+
+function bodyHtml(m) {
+  let h = m.html;
+  if (Array.isArray(h)) h = h.join("");
+  else if (h && typeof h === "object") h = Object.values(h).join("");
+  if (typeof h === "string" && h.trim()) return '<base target="_blank">' + h;
+  return '<pre style="white-space:pre-wrap;font-family:system-ui,sans-serif">' + esc(m.text || "") + "</pre>";
+}
+
+function renderBoxes() {
+  const fl = $("fl"); fl.replaceChildren();
+  boxes.forEach((b) => {
+    const t = el("button", "fbtn" + (box && box.id === b.id ? " active" : ""));
+    t.append(el("span", null, NAMES[b.path] || b.path));
+    if (b.totalUnreadMessages) t.append(el("span", "badge", b.totalUnreadMessages));
+    t.onclick = () => openBox(b);
+    fl.append(t);
+  });
+}
+async function loadBoxes() { boxes = await api("mailboxes"); renderBoxes(); }
+
+async function loadList(reset) {
+  const r = await api("messages", { mailbox: box.id, page });
+  const rows = $("rows");
+  if (reset) rows.replaceChildren();
+  const old = $("more"); if (old) old.remove();
+  if (reset && !r.items.length) rows.append(el("p", "muted pad", "Belum ada email."));
+  r.items.forEach((m) => {
+    const row = el("div", "row" + (m.isRead ? "" : " unread"));
+    row.append(el("div", "f", (m.from && (m.from.name || m.from.address)) || "(tanpa pengirim)"));
+    row.append(el("div", "s", m.subject || "(tanpa subjek)"));
+    row.append(el("div", "muted small", fmt(m.date)));
+    row.onclick = () => openMsg(m, row);
+    rows.append(row);
+  });
+  if (r.next) {
+    const more = el("button", null, "Muat lebih banyak"); more.id = "more"; more.style.margin = "1rem";
+    more.onclick = () => { page++; loadList(false); };
+    rows.append(more);
+  }
+}
+
+function openBox(b) {
+  box = b; page = 1; current = null; $("del").hidden = true;
+  $("boxname").textContent = NAMES[b.path] || b.path;
+  $("msg").replaceChildren(el("p", "muted pad", "Pilih email untuk dibaca."));
+  renderBoxes(); setView("list");
+  loadList(true).catch((e) => alert(e.message));
+}
+
+async function openMsg(m, row) {
+  document.querySelectorAll(".row.active").forEach((x) => x.classList.remove("active"));
+  row.classList.add("active"); row.classList.remove("unread");
+  setView("read");
+  const pane = $("msg"); pane.replaceChildren(el("p", "muted pad", "Memuat…"));
+  try {
+    const f = await api("message", { mailbox: box.id, id: m.id });
+    current = f; $("del").hidden = false;
+    const h = el("div", "pad");
+    h.append(el("h2", null, f.subject || "(tanpa subjek)"), el("div", "small", "Dari: " + who(f.from)), el("div", "small muted", fmt(f.date)));
+    if (f.attachments && f.attachments.length) h.append(el("div", "small muted", "Lampiran: " + f.attachments.map((a) => a.filename).join(", ")));
+    const fr = document.createElement("iframe");
+    fr.setAttribute("sandbox", "allow-popups allow-popups-to-escape-sandbox");
+    fr.srcdoc = bodyHtml(f);
+    pane.replaceChildren(h, fr);
+    loadBoxes();
+  } catch (e) { pane.replaceChildren(el("p", "pad", e.message)); }
+}
+
+$("del").onclick = async () => {
+  if (!current || !confirm("Hapus email ini?")) return;
+  try {
+    await api("delete", { mailbox: box.id, id: current.id }, "POST");
+    current = null; $("del").hidden = true;
+    $("msg").replaceChildren(el("p", "muted pad", "Email dihapus."));
+    setView("list"); page = 1; loadList(true); loadBoxes();
+  } catch (e) { alert(e.message); }
+};
+$("refresh").onclick = () => { page = 1; loadList(true); loadBoxes(); };
+$("out").onclick = () => { sessionStorage.removeItem("pw"); location.reload(); };
+document.querySelectorAll(".back").forEach((b) => (b.onclick = () => setView(b.dataset.to)));
+
+async function start(address) {
+  $("login").style.display = "none"; $("app").style.display = "grid";
+  $("who").textContent = address;
+  await loadBoxes();
+  openBox(boxes.find((b) => b.path === "INBOX") || boxes[0]);
+}
+$("login-form").onsubmit = async (e) => {
+  e.preventDefault(); pw = $("pw").value; $("err").textContent = "";
+  try { const r = await api("check"); sessionStorage.setItem("pw", pw); start(r.address); }
+  catch (err) { $("err").textContent = err.message; }
+};
+if (pw) api("check").then((r) => start(r.address)).catch(() => {});
+setInterval(() => { if ($("app").style.display === "grid") loadBoxes().catch(() => {}); }, 30000);
+</script>
+</body>
+</html>
