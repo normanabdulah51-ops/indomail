@@ -122,6 +122,14 @@ exports.handler = async (event) => {
         }
         return reply(200, m);
       }
+      case "flag":
+        if (event.httpMethod !== "POST") return reply(405, { error: "method" });
+        await smtp(msg, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/merge-patch+json" },
+          body: JSON.stringify({ isFlagged: q.value === "1" }),
+        });
+        return reply(200, { ok: true });
       case "delete":
         if (event.httpMethod !== "POST") return reply(405, { error: "method" });
         await smtp(msg, { method: "DELETE" });
