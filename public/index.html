@@ -14,7 +14,7 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
 input{font:inherit;width:100%;padding:.6rem .8rem;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg)}
 .muted{color:var(--muted)}.small{font-size:13px}.pad{padding:1rem}
 #login{height:100%;display:flex;align-items:center;justify-content:center;padding:1rem}
-#login form{width:100%;max-width:340px;display:grid;gap:.75rem}
+#login form{width:100%;max-width:360px;display:grid;gap:.8rem}.card{padding:2rem;border:1px solid var(--line);border-radius:14px;background:var(--panel)}
 #app{display:none;height:100%;grid-template-columns:210px 340px 1fr}
 #app>*{min-width:0;overflow:auto;border-right:1px solid var(--line)}
 #folders{background:var(--panel);display:flex;flex-direction:column}
@@ -39,11 +39,12 @@ iframe{flex:1;border:0;background:#fff;min-height:0}
 </style>
 </head>
 <body>
-<div id="login"><form id="login-form">
-<h1 class="brand" style="margin:0;font-size:1.4rem">Inbox</h1>
-<p class="muted" style="margin:0">Masukkan password untuk membuka email.</p>
+<div id="login"><form id="login-form" class="card">
+<h1 class="brand" style="margin:0;font-size:1.5rem">Inbox</h1>
+<p class="muted" style="margin:0">Masuk dengan alamat email dan password Anda.</p>
+<input id="em" type="email" placeholder="nama@domain.com" autocomplete="username" required>
 <input id="pw" type="password" placeholder="Password" autocomplete="current-password" required>
-<button class="primary">Masuk</button><p id="err" style="margin:0;color:#dc2626"></p>
+<button class="primary" id="go">Masuk</button><p id="err" style="margin:0;color:#dc2626" role="alert"></p>
 </form></div>
 <div id="app" data-view="list">
 <aside id="folders"><div class="head"><strong class="brand">Inbox</strong></div><nav id="fl"></nav>
@@ -57,7 +58,7 @@ const BRAND = "Inbox"; // ganti nama tampilan di sini
 const API = "/.netlify/functions/api";
 const NAMES = { INBOX: "Kotak masuk", Sent: "Terkirim", Drafts: "Draf", Trash: "Sampah", Junk: "Spam" };
 const $ = (id) => document.getElementById(id);
-let pw = sessionStorage.getItem("pw") || "", box = null, boxes = [], page = 1, current = null;
+let tk = sessionStorage.getItem("tk") || "", box = null, boxes = [], page = 1, current = null;
 document.title = BRAND;
 document.querySelectorAll(".brand").forEach((e) => (e.textContent = BRAND));
 
@@ -68,8 +69,8 @@ const who = (f) => (f && (f.name ? `${f.name} <${f.address}>` : f.address)) || "
 const setView = (v) => ($("app").dataset.view = v);
 
 async function api(action, params = {}, method = "GET") {
-  const res = await fetch(API + "?" + new URLSearchParams({ action, ...params }), { method, headers: { "x-access-password": pw } });
-  if (res.status === 401) { sessionStorage.removeItem("pw"); throw new Error("Password salah"); }
+  const res = await fetch(API + "?" + new URLSearchParams({ action, ...params }), { method, headers: { authorization: "Bearer " + tk } });
+  if (res.status === 401) { sessionStorage.removeItem("tk"); throw new Error("Sesi berakhir, silakan masuk lagi"); }
   if (!res.ok) throw new Error("Gagal memuat data");
   return res.json();
 }
@@ -152,7 +153,7 @@ $("del").onclick = async () => {
   } catch (e) { alert(e.message); }
 };
 $("refresh").onclick = () => { page = 1; loadList(true); loadBoxes(); };
-$("out").onclick = () => { sessionStorage.removeItem("pw"); location.reload(); };
+$("out").onclick = () => { sessionStorage.removeItem("tk"); location.reload(); };
 document.querySelectorAll(".back").forEach((b) => (b.onclick = () => setView(b.dataset.to)));
 
 async function start(address) {
@@ -162,11 +163,16 @@ async function start(address) {
   openBox(boxes.find((b) => b.path === "INBOX") || boxes[0]);
 }
 $("login-form").onsubmit = async (e) => {
-  e.preventDefault(); pw = $("pw").value; $("err").textContent = "";
-  try { const r = await api("check"); sessionStorage.setItem("pw", pw); start(r.address); }
-  catch (err) { $("err").textContent = err.message; }
+  e.preventDefault(); $("err").textContent = ""; $("go").disabled = true;
+  try {
+    const res = await fetch(API + "?action=login", { method: "POST", body: JSON.stringify({ address: $("em").value, password: $("pw").value }) });
+    const r = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(r.error || "Gagal masuk");
+    tk = r.token; sessionStorage.setItem("tk", tk); $("pw").value = ""; start(r.address);
+  } catch (err) { $("err").textContent = err.message; }
+  $("go").disabled = false;
 };
-if (pw) api("check").then((r) => start(r.address)).catch(() => {});
+if (tk) api("check").then((r) => start(r.address)).catch(() => {});
 setInterval(() => { if ($("app").style.display === "grid") loadBoxes().catch(() => {}); }, 30000);
 </script>
 </body>
