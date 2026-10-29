@@ -228,8 +228,9 @@ async function openMsg(m) {
     const dl = el("a", null, "Detail");
     meta.append("kepada saya · " + ago(f.date) + " ", dl);
     w.append(el("b", null, sender(f.from)), meta);
-    
-    
+    const rp = el("a", "ic");
+    rp.setAttribute("aria-label", "Balas lewat aplikasi email");
+    mh.append(el("div", "av", sender(f.from).charAt(0).toUpperCase()), w, rp);
     const det = el("div", "det", `Dari: ${who(f.from)}\nKepada: ${(f.to || []).map(who).join(", ")}\nTanggal: ${fmt(f.date)}`); det.hidden = true;
     dl.onclick = () => (det.hidden = !det.hidden);
     const card = el("div", "mcard"); card.append(mh, det);
