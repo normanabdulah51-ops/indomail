@@ -127,7 +127,7 @@ const setView = (v) => ($("app").dataset.view = v);
 const setDrawer = (v) => ($("app").dataset.drawer = v ? "1" : "0");
 function short(d) {
   const x = new Date(d), n = new Date();
-  if (x.toDateString() === n.toDateString()) return x.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }).toLowerCase();
+  if (x.toDateString() === n.toDateString()) return x.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }).replace(".", ":");
   return x.toLocaleDateString("id-ID", x.getFullYear() === n.getFullYear() ? { day: "numeric", month: "short" } : { day: "numeric", month: "short", year: "2-digit" });
 }
 function ago(d) {
