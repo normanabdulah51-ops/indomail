@@ -5,68 +5,139 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Inbox</title>
 <style>
-:root{--accent:#2563eb;--bg:#fff;--panel:#f6f7f9;--fg:#1b1f24;--muted:#6b7280;--line:#e3e6ea;color-scheme:light dark}
-@media(prefers-color-scheme:dark){:root{--accent:#6ea8ff;--bg:#14161a;--panel:#1b1e23;--fg:#e8eaed;--muted:#9aa0a6;--line:#2a2e35}}
-*{box-sizing:border-box}html,body{height:100%;margin:0}
-body{font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--fg)}
-button{font:inherit;cursor:pointer;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:8px;padding:.4rem .8rem}
-button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+:root{--accent:#0b57d0;--page:#eceef3;--bg:#fff;--panel:#f4f5f7;--fg:#1f1f1f;--muted:#5f6368;--line:#e3e6ea;--sel:#d3e3fd;color-scheme:light dark}
+@media(prefers-color-scheme:dark){:root{--accent:#8ab4f8;--page:#101216;--bg:#1b1e23;--panel:#16181c;--fg:#e8eaed;--muted:#9aa0a6;--line:#2a2e35;--sel:#2b3a55}}
+*{box-sizing:border-box}html,body{height:100%;margin:0}[hidden]{display:none!important}
+body{font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--page);color:var(--fg)}
+button{font:inherit;color:inherit;cursor:pointer}
 input{font:inherit;width:100%;padding:.6rem .8rem;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg)}
+.btn{display:inline-flex;align-items:center;gap:.4rem;border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:.5rem .8rem}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;justify-content:center}
+.btn.dark{border:2px solid var(--fg);border-radius:12px;font-weight:500}
+.ic{border:0;background:none;padding:.25rem;display:inline-flex;color:var(--muted);text-decoration:none}
 .muted{color:var(--muted)}.small{font-size:13px}.pad{padding:1rem}
 #login{height:100%;display:flex;align-items:center;justify-content:center;padding:1rem}
-#login form{width:100%;max-width:360px;display:grid;gap:.8rem}.card{padding:2rem;border:1px solid var(--line);border-radius:14px;background:var(--panel)}
-#app{display:none;height:100%;grid-template-columns:210px 340px 1fr}
-#app>*{min-width:0;overflow:auto;border-right:1px solid var(--line)}
-#folders{background:var(--panel);display:flex;flex-direction:column}
-#fl{flex:1;padding:.5rem}.foot{padding:1rem;display:grid;gap:.5rem}
-.head{display:flex;gap:.5rem;align-items:center;justify-content:space-between;padding:.7rem 1rem;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg)}
-.fbtn{display:flex;justify-content:space-between;width:100%;border:0;background:none;text-align:left;margin-bottom:2px}
-.fbtn.active{background:var(--bg);font-weight:600}
-.badge{background:var(--accent);color:#fff;border-radius:99px;padding:0 .5rem;font-size:12px}
-.row{padding:.7rem 1rem;border-bottom:1px solid var(--line);cursor:pointer}
-.row.active{background:var(--panel)}.row.unread .f,.row.unread .s{font-weight:700}
-.row .f,.row .s{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#read{display:flex;flex-direction:column;overflow:hidden}
-#msg{flex:1;display:flex;flex-direction:column;min-height:0}
-#msg h2{margin:0 0 .4rem;font-size:1.15rem}
-iframe{flex:1;border:0;background:#fff;min-height:0}
-.back{display:none}
-@media(max-width:860px){
-#app{grid-template-columns:1fr}#app>*{display:none;border-right:0}
-#app[data-view=folders]>#folders,#app[data-view=list]>#list{display:block}
-#app[data-view=folders]>#folders{display:flex}
-#app[data-view=read]>#read{display:flex}.back{display:inline-block}}
+#login form{width:100%;max-width:360px;display:grid;gap:.8rem}
+.card{padding:2rem;border:1px solid var(--line);border-radius:14px;background:var(--panel)}
+.field{display:flex;align-items:center;border:1px solid var(--line);border-radius:8px;background:var(--bg);padding-right:.8rem;cursor:text}
+.field:focus-within{outline:2px solid var(--accent);outline-offset:-1px}
+.field input{flex:1;min-width:0;border:0;outline:0;background:none;padding:.6rem 0 .6rem .8rem}
+.field span{color:var(--muted);white-space:nowrap}
+#app{display:none;height:100%;position:relative;overflow:hidden}#app.on{display:block}
+#folders{position:fixed;inset:0 auto 0 0;width:280px;max-width:84%;z-index:20;background:var(--panel);display:flex;flex-direction:column;transform:translateX(-100%);transition:transform .2s;box-shadow:2px 0 16px rgba(0,0,0,.2)}
+#app[data-drawer="1"] #folders{transform:none}
+#scrim{display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:10}
+#app[data-drawer="1"] #scrim{display:block}
+.dhead{padding:1.1rem 1rem;background:var(--bg);font-weight:700;word-break:break-all}
+#fl{flex:1;padding:.75rem}
+.fbtn{display:block;width:100%;text-align:left;border:0;background:none;padding:.65rem .8rem;border-radius:12px;margin-bottom:2px}
+.fbtn.active{background:var(--bg);font-weight:700}.fbtn .badge{float:right;color:var(--accent);font-weight:700}
+.foot{padding:1rem}.foot .btn{width:100%;justify-content:center}
+#list,#read{position:absolute;inset:0;background:var(--bg);overflow:auto}
+#read{background:var(--page);display:none}#app[data-view=read] #read{display:block}
+.bar{display:flex;align-items:center;justify-content:space-between;gap:.5rem;padding:.75rem 1rem;position:sticky;top:0;background:var(--bg);z-index:2}
+#read .bar{background:var(--page)}
+.search{display:flex;align-items:center;gap:.5rem;margin:0 .75rem .5rem;padding:0 .75rem;border-bottom:1px solid var(--line);color:var(--muted)}
+.search input{border:0;background:none;padding:.6rem 0}
+.row{display:grid;grid-template-columns:28px 1fr 36px;gap:.5rem;align-items:start;padding:.65rem .75rem;border-bottom:1px solid var(--line);border-left:4px solid transparent;cursor:pointer}
+.row.sel{background:var(--sel);border-left-color:var(--accent)}.row input{width:auto;margin-top:.35rem}
+.l1{display:flex;justify-content:space-between;gap:.5rem}
+.l1 .f,.l2,.l3{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.l3{color:var(--muted)}.l1 time{font-size:13px;color:var(--muted);flex:none}
+.row.unread .f,.row.unread .l2{font-weight:700}.row.unread time{color:var(--accent);font-weight:600}
+.star.on{color:#f4b400}
+#selbar{position:sticky;bottom:0;display:flex;align-items:center;justify-content:space-between;padding:.7rem 1rem;background:var(--panel);border-top:1px solid var(--line)}
+.cnt{background:#80868b;color:#fff;border-radius:6px;padding:0 .5rem;font-size:13px}
+.subj{display:flex;justify-content:space-between;align-items:flex-start;gap:.5rem;padding:.6rem 1rem}
+.subj h2{margin:0;font-size:1.05rem;font-weight:500}
+.mcard{background:var(--bg);border-radius:12px;margin:0 .6rem;padding:.9rem .9rem 0;overflow:hidden}
+.mh{display:flex;gap:.7rem;align-items:flex-start;margin-bottom:.6rem}
+.av{width:44px;height:44px;border-radius:8px;background:#00838f;color:#fff;display:grid;place-items:center;font-size:1.4rem;flex:none}
+.who{flex:1;min-width:0}.who b{display:block}.who a{color:var(--accent);cursor:pointer}
+.det{background:var(--panel);border-radius:8px;padding:.5rem .7rem;margin-bottom:.6rem;font-size:13px;word-break:break-all;white-space:pre-line}
+iframe{display:block;width:100%;border:0;background:#fff;min-height:200px}
+.footer{text-align:center;padding:1.5rem 1rem 2rem}
+@media(min-width:900px){
+#app.on{display:grid;grid-template-columns:260px 400px 1fr}
+#folders{position:static;transform:none;box-shadow:none;max-width:none;width:auto}
+#scrim{display:none!important}
+#list,#read{position:static;display:block;border-left:1px solid var(--line)}
+#menu,.back{display:none}}
 </style>
 </head>
 <body>
 <div id="login"><form id="login-form" class="card">
 <h1 class="brand" style="margin:0;font-size:1.5rem">Inbox</h1>
 <p class="muted" style="margin:0">Masuk dengan alamat email dan password Anda.</p>
-<input id="em" type="email" placeholder="nama@domain.com" autocomplete="username" required>
+<label class="field"><input id="em" type="text" placeholder="nama" autocomplete="username" autocapitalize="none" spellcheck="false" required><span id="dom"></span></label>
 <input id="pw" type="password" placeholder="Password" autocomplete="current-password" required>
-<button class="primary" id="go">Masuk</button><p id="err" style="margin:0;color:#dc2626" role="alert"></p>
+<button class="btn primary" id="go">Masuk</button><p id="err" style="margin:0;color:#dc2626" role="alert"></p>
 </form></div>
-<div id="app" data-view="list">
-<aside id="folders"><div class="head"><strong class="brand">Inbox</strong></div><nav id="fl"></nav>
-<div class="foot"><div id="who" class="small muted"></div><button id="out">Keluar</button></div></aside>
-<section id="list"><div class="head"><button class="back" data-to="folders">←</button><strong id="boxname"></strong><button id="refresh">Muat ulang</button></div><div id="rows"></div></section>
-<article id="read"><div class="head"><button class="back" data-to="list">←</button><span></span><button id="del" hidden>Hapus</button></div>
+<div id="app" data-view="list" data-drawer="0">
+<aside id="folders"><div class="dhead" id="who"></div><nav id="fl"></nav><div class="foot"><button id="out" class="btn">Keluar</button></div></aside>
+<div id="scrim"></div>
+<section id="list">
+<header class="bar"><button id="menu" class="btn" data-ic="menu" aria-label="Menu"></button><strong id="boxname"></strong><button id="refresh" class="btn" data-ic="refresh">Muat Ulang</button></header>
+<label class="search"><span data-ic="search"></span><input id="q" placeholder="Telusuri" autocomplete="off"></label>
+<div id="rows"></div>
+<div id="selbar" hidden><span class="cnt" id="cnt">1</span><button id="delsel" class="btn dark" data-ic="trash">Hapus</button><button id="clr" class="ic" data-ic="close" aria-label="Batal pilih"></button></div>
+</section>
+<article id="read"><header class="bar"><button class="btn back" data-ic="back"><span id="backname">Kotak Masuk</span></button><button id="del" class="btn" data-ic="trash" hidden>Hapus</button></header>
 <div id="msg"><p class="muted pad">Pilih email untuk dibaca.</p></div></article>
 </div>
 <script>
-const BRAND = "Inbox"; // ganti nama tampilan di sini
+const BRAND = "Inbox";               // nama tampilan
+const DOMAIN = "indomail.biz.id";    // domain email, otomatis ditambahkan saat login
+const SHOW = ["INBOX", "Trash"];     // folder yang ditampilkan
 const API = "/.netlify/functions/api";
-const NAMES = { INBOX: "Kotak masuk", Sent: "Terkirim", Drafts: "Draf", Trash: "Sampah", Junk: "Spam" };
+const NAMES = { INBOX: "Kotak masuk", Trash: "Sampah", Sent: "Terkirim", Drafts: "Draf", Junk: "Spam" };
+const TITLES = { INBOX: "Kotak Masuk", Trash: "Sampah", Sent: "Terkirim", Drafts: "Draf", Junk: "Spam" };
+const ICON = {
+  menu: "M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z",
+  refresh: "M17.65 6.35A7.96 7.96 0 0 0 12 4a8 8 0 1 0 7.73 10h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z",
+  search: "M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z",
+  trash: "M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z",
+  star: "M22 9.24l-7.19-.62L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21 12 17.27 18.18 21l-1.63-7.03L22 9.24zM12 15.4l-3.76 2.27 1-4.28-3.32-2.88 4.38-.38L12 6.1l1.71 4.04 4.38.38-3.32 2.88 1 4.28L12 15.4z",
+  starOn: "M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z",
+  reply: "M10 9V5l-7 7 7 7v-4.1c5 0 8.5 1.6 11 5.1-1-5-4-10-11-11z",
+  back: "M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z",
+  close: "M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z",
+};
 const $ = (id) => document.getElementById(id);
-let tk = sessionStorage.getItem("tk") || "", box = null, boxes = [], page = 1, current = null;
+let tk = sessionStorage.getItem("tk") || "", box = null, boxes = [], page = 1, items = [], hasMore = false, current = null, address = "";
+const sel = new Set();
 document.title = BRAND;
+$("dom").textContent = "@" + DOMAIN;
 document.querySelectorAll(".brand").forEach((e) => (e.textContent = BRAND));
+
+const NS = "http://www.w3.org/2000/svg";
+function ic(n) {
+  const s = document.createElementNS(NS, "svg"), p = document.createElementNS(NS, "path");
+  s.setAttribute("viewBox", "0 0 24 24"); s.setAttribute("width", "20"); s.setAttribute("height", "20"); s.setAttribute("fill", "currentColor");
+  p.setAttribute("d", ICON[n]); s.append(p); return s;
+}
+document.querySelectorAll("[data-ic]").forEach((b) => b.prepend(ic(b.dataset.ic)));
 
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
 const fmt = (d) => new Date(d).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" });
 const who = (f) => (f && (f.name ? `${f.name} <${f.address}>` : f.address)) || "(tanpa pengirim)";
+const sender = (f) => (f && (f.name || f.address)) || "(tanpa pengirim)";
 const setView = (v) => ($("app").dataset.view = v);
+const setDrawer = (v) => ($("app").dataset.drawer = v ? "1" : "0");
+function short(d) {
+  const x = new Date(d), n = new Date();
+  if (x.toDateString() === n.toDateString()) return x.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }).toLowerCase();
+  return x.toLocaleDateString("id-ID", x.getFullYear() === n.getFullYear() ? { day: "numeric", month: "short" } : { day: "numeric", month: "short", year: "2-digit" });
+}
+function ago(d) {
+  const s = (Date.now() - new Date(d)) / 1000;
+  if (s < 60) return "baru saja";
+  if (s < 3600) return Math.floor(s / 60) + " menit yang lalu";
+  if (s < 86400) return Math.floor(s / 3600) + " jam yang lalu";
+  if (s < 604800) return Math.floor(s / 86400) + " hari yang lalu";
+  return fmt(d);
+}
 
 async function api(action, params = {}, method = "GET") {
   const res = await fetch(API + "?" + new URLSearchParams({ action, ...params }), { method, headers: { authorization: "Bearer " + tk } });
@@ -83,11 +154,21 @@ function bodyHtml(m) {
   return '<pre style="white-space:pre-wrap;font-family:system-ui,sans-serif">' + esc(m.text || "") + "</pre>";
 }
 
+function starBtn(m) {
+  const b = el("button", "ic star"); b.setAttribute("aria-label", "Bintangi");
+  const paint = () => { b.classList.toggle("on", !!m.isFlagged); b.replaceChildren(ic(m.isFlagged ? "starOn" : "star")); };
+  b.onclick = (e) => {
+    e.stopPropagation(); m.isFlagged = !m.isFlagged; paint();
+    api("flag", { mailbox: box.id, id: m.id, value: m.isFlagged ? 1 : 0 }, "POST").catch(() => { m.isFlagged = !m.isFlagged; paint(); });
+  };
+  paint(); return b;
+}
+
 function renderBoxes() {
+  const vis = boxes.filter((b) => SHOW.includes(b.path)), list = vis.length ? vis : boxes;
   const fl = $("fl"); fl.replaceChildren();
-  boxes.forEach((b) => {
-    const t = el("button", "fbtn" + (box && box.id === b.id ? " active" : ""));
-    t.append(el("span", null, NAMES[b.path] || b.path));
+  list.forEach((b) => {
+    const t = el("button", "fbtn" + (box && box.id === b.id ? " active" : ""), NAMES[b.path] || b.path);
     if (b.totalUnreadMessages) t.append(el("span", "badge", b.totalUnreadMessages));
     t.onclick = () => openBox(b);
     fl.append(t);
@@ -95,50 +176,71 @@ function renderBoxes() {
 }
 async function loadBoxes() { boxes = await api("mailboxes"); renderBoxes(); }
 
-async function loadList(reset) {
-  const r = await api("messages", { mailbox: box.id, page });
-  const rows = $("rows");
-  if (reset) rows.replaceChildren();
-  const old = $("more"); if (old) old.remove();
-  if (reset && !r.items.length) rows.append(el("p", "muted pad", "Belum ada email."));
-  r.items.forEach((m) => {
-    const row = el("div", "row" + (m.isRead ? "" : " unread"));
-    row.append(el("div", "f", (m.from && (m.from.name || m.from.address)) || "(tanpa pengirim)"));
-    row.append(el("div", "s", m.subject || "(tanpa subjek)"));
-    row.append(el("div", "muted small", fmt(m.date)));
-    row.onclick = () => openMsg(m, row);
+function renderSel() { $("selbar").hidden = !sel.size; $("cnt").textContent = sel.size; }
+
+function renderRows() {
+  const rows = $("rows"); rows.replaceChildren();
+  const term = $("q").value.trim().toLowerCase();
+  const shown = items.filter((m) => !term || [m.subject, m.intro, m.from && m.from.name, m.from && m.from.address].join(" ").toLowerCase().includes(term));
+  if (!shown.length) rows.append(el("p", "muted pad", items.length ? "Tidak ada hasil." : "Belum ada email."));
+  shown.forEach((m) => {
+    const row = el("div", "row" + (m.isRead ? "" : " unread") + (sel.has(m.id) ? " sel" : ""));
+    const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = sel.has(m.id);
+    cb.onclick = (e) => e.stopPropagation();
+    cb.onchange = () => { cb.checked ? sel.add(m.id) : sel.delete(m.id); renderRows(); renderSel(); };
+    const c = el("div"), l1 = el("div", "l1");
+    l1.append(el("span", "f", sender(m.from)), el("time", null, short(m.date)));
+    c.append(l1, el("div", "l2", m.subject || "(tanpa subjek)"), el("div", "l3", m.intro || ""));
+    row.append(cb, c, starBtn(m));
+    row.onclick = () => openMsg(m);
     rows.append(row);
   });
-  if (r.next) {
-    const more = el("button", null, "Muat lebih banyak"); more.id = "more"; more.style.margin = "1rem";
-    more.onclick = () => { page++; loadList(false); };
+  if (hasMore && !term) {
+    const more = el("button", "btn", "Muat lebih banyak"); more.style.margin = "1rem";
+    more.onclick = () => { page++; loadList(false).catch((e) => alert(e.message)); };
     rows.append(more);
   }
 }
 
+async function loadList(reset) {
+  if (reset) { page = 1; items = []; sel.clear(); renderSel(); }
+  const r = await api("messages", { mailbox: box.id, page });
+  items = items.concat(r.items); hasMore = r.next; renderRows();
+}
+
 function openBox(b) {
-  box = b; page = 1; current = null; $("del").hidden = true;
-  $("boxname").textContent = NAMES[b.path] || b.path;
+  box = b; current = null; $("del").hidden = true; $("q").value = "";
+  $("boxname").textContent = TITLES[b.path] || b.path;
   $("msg").replaceChildren(el("p", "muted pad", "Pilih email untuk dibaca."));
-  renderBoxes(); setView("list");
+  renderBoxes(); setView("list"); setDrawer(false);
   loadList(true).catch((e) => alert(e.message));
 }
 
-async function openMsg(m, row) {
-  document.querySelectorAll(".row.active").forEach((x) => x.classList.remove("active"));
-  row.classList.add("active"); row.classList.remove("unread");
-  setView("read");
-  const pane = $("msg"); pane.replaceChildren(el("p", "muted pad", "Memuat…"));
+async function openMsg(m) {
+  m.isRead = true; current = null; $("del").hidden = true; setView("read");
+  $("backname").textContent = TITLES[box.path] || box.path;
+  const pane = $("msg"); pane.replaceChildren(el("p", "muted pad", "Memuat…")); $("read").scrollTop = 0;
   try {
     const f = await api("message", { mailbox: box.id, id: m.id });
     current = f; $("del").hidden = false;
-    const h = el("div", "pad");
-    h.append(el("h2", null, f.subject || "(tanpa subjek)"), el("div", "small", "Dari: " + who(f.from)), el("div", "small muted", fmt(f.date)));
-    if (f.attachments && f.attachments.length) h.append(el("div", "small muted", "Lampiran: " + f.attachments.map((a) => a.filename).join(", ")));
+    const subj = el("div", "subj"); subj.append(el("h2", null, f.subject || "(tanpa subjek)"), starBtn(m));
+    const mh = el("div", "mh"), w = el("div", "who"), meta = el("div", "small muted");
+    const dl = el("a", null, "Detail");
+    meta.append("kepada saya · " + ago(f.date) + " ", dl);
+    w.append(el("b", null, sender(f.from)), meta);
+    const rp = el("a", "ic"); rp.href = "mailto:" + ((f.from && f.from.address) || "") + "?subject=" + encodeURIComponent("Re: " + (f.subject || ""));
+    rp.setAttribute("aria-label", "Balas lewat aplikasi email"); rp.append(ic("reply"));
+    mh.append(el("div", "av", sender(f.from).charAt(0).toUpperCase()), w, rp);
+    const det = el("div", "det", `Dari: ${who(f.from)}\nKepada: ${(f.to || []).map(who).join(", ")}\nTanggal: ${fmt(f.date)}`); det.hidden = true;
+    dl.onclick = () => (det.hidden = !det.hidden);
+    const card = el("div", "mcard"); card.append(mh, det);
+    if (f.attachments && f.attachments.length) card.append(el("div", "small muted", "Lampiran: " + f.attachments.map((a) => a.filename).join(", ")));
     const fr = document.createElement("iframe");
-    fr.setAttribute("sandbox", "allow-popups allow-popups-to-escape-sandbox");
+    fr.setAttribute("sandbox", "allow-same-origin allow-popups allow-popups-to-escape-sandbox");
     fr.srcdoc = bodyHtml(f);
-    pane.replaceChildren(h, fr);
+    fr.onload = () => { try { fr.style.height = fr.contentDocument.documentElement.scrollHeight + "px"; } catch (e) {} };
+    card.append(fr);
+    pane.replaceChildren(subj, card, el("div", "footer muted small", "© " + new Date().getFullYear() + " " + address.split("@")[1]));
     loadBoxes();
   } catch (e) { pane.replaceChildren(el("p", "pad", e.message)); }
 }
@@ -147,25 +249,37 @@ $("del").onclick = async () => {
   if (!current || !confirm("Hapus email ini?")) return;
   try {
     await api("delete", { mailbox: box.id, id: current.id }, "POST");
-    current = null; $("del").hidden = true;
+    items = items.filter((m) => m.id !== current.id); current = null; $("del").hidden = true;
     $("msg").replaceChildren(el("p", "muted pad", "Email dihapus."));
-    setView("list"); page = 1; loadList(true); loadBoxes();
+    setView("list"); renderRows(); loadBoxes();
   } catch (e) { alert(e.message); }
 };
-$("refresh").onclick = () => { page = 1; loadList(true); loadBoxes(); };
+$("delsel").onclick = async () => {
+  const ids = [...sel];
+  if (!ids.length || !confirm(`Hapus ${ids.length} email?`)) return;
+  const res = await Promise.allSettled(ids.map((id) => api("delete", { mailbox: box.id, id }, "POST")));
+  const gone = ids.filter((id, i) => res[i].status === "fulfilled");
+  if (gone.length < ids.length) alert("Sebagian email gagal dihapus.");
+  items = items.filter((m) => !gone.includes(m.id)); sel.clear();
+  renderRows(); renderSel(); loadBoxes();
+};
+$("clr").onclick = () => { sel.clear(); renderRows(); renderSel(); };
+$("q").oninput = renderRows;
+$("menu").onclick = () => setDrawer($("app").dataset.drawer !== "1");
+$("scrim").onclick = () => setDrawer(false);
+$("refresh").onclick = () => { loadList(true).catch((e) => alert(e.message)); loadBoxes(); };
 $("out").onclick = () => { sessionStorage.removeItem("tk"); location.reload(); };
-document.querySelectorAll(".back").forEach((b) => (b.onclick = () => setView(b.dataset.to)));
+document.querySelectorAll(".back").forEach((b) => (b.onclick = () => { setView("list"); renderRows(); }));
 
-async function start(address) {
-  $("login").style.display = "none"; $("app").style.display = "grid";
-  $("who").textContent = address;
+async function start(addr) {
+  address = addr; $("login").style.display = "none"; $("app").classList.add("on"); $("who").textContent = addr;
   await loadBoxes();
   openBox(boxes.find((b) => b.path === "INBOX") || boxes[0]);
 }
 $("login-form").onsubmit = async (e) => {
   e.preventDefault(); $("err").textContent = ""; $("go").disabled = true;
   try {
-    const res = await fetch(API + "?action=login", { method: "POST", body: JSON.stringify({ address: $("em").value, password: $("pw").value }) });
+    const res = await fetch(API + "?action=login", { method: "POST", body: JSON.stringify({ address: $("em").value.trim().split("@")[0] + "@" + DOMAIN, password: $("pw").value }) });
     const r = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(r.error || "Gagal masuk");
     tk = r.token; sessionStorage.setItem("tk", tk); $("pw").value = ""; start(r.address);
@@ -173,7 +287,7 @@ $("login-form").onsubmit = async (e) => {
   $("go").disabled = false;
 };
 if (tk) api("check").then((r) => start(r.address)).catch(() => {});
-setInterval(() => { if ($("app").style.display === "grid") loadBoxes().catch(() => {}); }, 30000);
+setInterval(() => { if ($("app").classList.contains("on")) loadBoxes().catch(() => {}); }, 30000);
 </script>
 </body>
 </html>
